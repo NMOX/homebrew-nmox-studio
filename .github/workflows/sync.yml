@@ -1,0 +1,36 @@
+name: Sync cask
+# The canonical tap mirrors the cask the main repo's release pipeline
+# writes (NMOX/NMOX-Studio Casks/nmox-studio.rb). Zero secrets by
+# design: this repo's own token commits to itself; the source is
+# public raw content. Cron covers everyone; workflow_dispatch gives
+# the release pipeline an instant nudge.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pull the cask from the main repo
+        run: |
+          curl -sf https://raw.githubusercontent.com/NMOX/NMOX-Studio/main/Casks/nmox-studio.rb -o Casks/nmox-studio.rb
+          ruby -c /dev/null >/dev/null 2>&1 || true
+          grep -q 'cask "nmox-studio"' Casks/nmox-studio.rb
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/nmox-studio.rb
+          if git diff --cached --quiet; then
+            echo "cask already current"
+          else
+            VER=$(grep -o 'version "[0-9.]*"' Casks/nmox-studio.rb | grep -o '[0-9.]*')
+            git commit -m "nmox-studio $VER"
+            git push
+          fi
